@@ -2,6 +2,7 @@ const db = require("../../database/models");
 const { Op } = require("sequelize");
 const fs = require("fs");
 const path = require("path");
+const { log } = require("console");
 
 const apiProductsController = {
   detail: async (req, res) => {
@@ -39,29 +40,44 @@ const apiProductsController = {
       .catch((err) => console.log(err));
   },
 
-  destroy: (req, res) => {
-    const { id } = req.params;
-    db.Product.destroy({
-      where: {
-        id,
-      },
-    });
-    db.Product.findOne({
-      where: {
-        id,
-      },
-    })
-      .then((resp) => {
+  destroy: async (req, res) => {
+    const id  = parseInt(req.params.id);
+
+    try {
+
+      if(!Number.isInteger(id)){
+        throw new Error('Los ID corresponde a numeros enteros, ingrese el valor correcto')
+      }
+      
+      const producto = await db.Product.findOne({
+        where: {
+          id,
+        },
+      });
+
+      if (producto) {
+        
         fs.unlink(
-          path.join(__dirname, `../../public/img/${resp.dataValues.image}`),
+          path.join(__dirname, `../../../public/img/${producto.image}`),
           (err) => {
             if (err) throw err;
-
-            res.redirect(`/`);
           }
         );
-      })
-      .catch((err) => console.log(err));
+
+        await db.Product.destroy({
+          where: {
+            id,
+          },
+        });
+
+        res.status(200).send("El producto ID fue eliminado");
+
+      }else{
+        throw new Error("El ID indicado no corresponde a un producto existente")
+      }
+    } catch (e) {
+      res.status(400).send(e.message)
+    }
   },
 
   list: async (req, res) => {
@@ -103,7 +119,6 @@ const apiProductsController = {
 
       //verifico el resultado
       if (idCategorie) {
-
         //Creo el objeto que va a ser el nuevo filtro
         idCategorie = idCategorie.id;
 
@@ -117,7 +132,7 @@ const apiProductsController = {
         arraySearch.push(serachCategory);
       }
     }
-    
+
     try {
       //Metodo que me permite buscar y contar el total de elementos
       const products = await db.Product.findAndCountAll(query);
